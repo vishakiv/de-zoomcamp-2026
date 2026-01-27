@@ -17,7 +17,7 @@ RUN uv sync --locked
 
 # # copy the script into the container. 1st name is source file, 2nd is destination
 # # dot means current working directory inside the image
-COPY ingest_data.py ingest_data_2.py .
+COPY ingest_data.py ingest_data_2.py ingest_data_3.py .
 
-ENTRYPOINT ["uv", "run", "python"]
+ENTRYPOINT ["uv", "run", "python", "ingest_data_2.py"]
  
