@@ -12,3 +12,9 @@ data/
 
 # OS
 .DS_Store
+#JSON
+*.json
+
+# Terraform
+.terraform/
+.terraform.lock.hcl

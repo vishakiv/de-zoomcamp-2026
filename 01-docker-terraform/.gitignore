@@ -14,4 +14,7 @@ data/
 .DS_Store
 
 *.json
-*.terraform
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
