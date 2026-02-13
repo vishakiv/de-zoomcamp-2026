@@ -18,3 +18,5 @@ data/
 # Terraform
 .terraform/
 .terraform.lock.hcl
+
+.env*

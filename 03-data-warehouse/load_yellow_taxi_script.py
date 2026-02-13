@@ -1,11 +1,14 @@
 import os
 import sys
+import argparse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from google.cloud import storage
 from google.api_core.exceptions import NotFound, Forbidden
 import time
 
+## This script downloads the yellow and green taxi trip data (in parquet format) for specified years and months (default 2019 and 2020), uploads them to a GCS bucket, and verifies the uploads. 
+# It uses parallel processing to speed up both downloading and uploading.
 
 # Change this to your bucket name
 BUCKET_NAME = "kestra-zoomcamp-vishaki-demo"
@@ -17,9 +20,9 @@ client = storage.Client.from_service_account_json(CREDENTIALS_FILE)
 #client = storage.Client(project='zoomcamp-mod3-datawarehouse')
 
 
-BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2024-"
-MONTHS = [f"{i:02d}" for i in range(1, 7)]
-DOWNLOAD_DIR = "."
+BASE_URL_TEMPLATE = "https://d37ci6vzurychx.cloudfront.net/trip-data/{color}_tripdata_{year}-"
+MONTHS = [f"{i:02d}" for i in range(1, 13)]
+DOWNLOAD_DIR = "data"
 
 CHUNK_SIZE = 8 * 1024 * 1024
 
@@ -28,9 +31,14 @@ os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 bucket = client.bucket(BUCKET_NAME)
 
 
-def download_file(month):
-    url = f"{BASE_URL}{month}.parquet"
-    file_path = os.path.join(DOWNLOAD_DIR, f"yellow_tripdata_2024-{month}.parquet")
+def download_file(task):
+    color = task["color"]
+    year = task["year"]
+    month = task["month"]
+
+    url = f"{BASE_URL_TEMPLATE.format(color=color, year=year)}{month}.parquet"
+    filename = f"{color}_tripdata_{year}-{month}.parquet"
+    file_path = os.path.join(DOWNLOAD_DIR, filename)
 
     try:
         print(f"Downloading {url}...")
@@ -101,13 +109,44 @@ def upload_to_gcs(file_path, max_retries=3):
     print(f"Giving up on {file_path} after {max_retries} attempts.")
 
 
+def parse_csv_list(value):
+    if not value:
+        return []
+    return [v.strip() for v in value.split(",") if v.strip()]
+
+
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Download taxi trip parquet files and upload to GCS")
+    parser.add_argument("--colors", type=str, default="yellow,green", help="Comma-separated colors (yellow,green)")
+    parser.add_argument("--years", type=str, default="2019,2020", help="Comma-separated years to download (e.g. 2019,2020)")
+    parser.add_argument("--months", type=str, default=",".join(MONTHS), help="Comma-separated months (01..12) or leave default for all")
+    parser.add_argument("--download-dir", type=str, default=DOWNLOAD_DIR, help="Local download directory")
+    parser.add_argument("--max-workers", type=int, default=4, help="Number of parallel workers for download/upload")
+
+    args = parser.parse_args()
+
+    colors = parse_csv_list(args.colors)
+    years = parse_csv_list(args.years)
+    months = parse_csv_list(args.months)
+    DOWNLOAD_DIR = args.download_dir
+
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+
     create_bucket(BUCKET_NAME)
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        file_paths = list(executor.map(download_file, MONTHS))
+    # Build task list: each task is a dict with color/year/month
+    tasks = []
+    for color in colors:
+        for year in years:
+            for month in months:
+                tasks.append({"color": color, "year": year, "month": month})
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    # Download
+    with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
+        file_paths = list(executor.map(download_file, tasks))
+
+    # Upload
+    with ThreadPoolExecutor(max_workers=args.max_workers) as executor:
         executor.map(upload_to_gcs, filter(None, file_paths))  # Remove None values
 
     print("All files processed and verified.")
