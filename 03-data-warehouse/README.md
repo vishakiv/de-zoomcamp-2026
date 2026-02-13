@@ -1,6 +1,4 @@
-# Week 2: Data Warehouse and BigQuery
+# Week 3: Data Warehouse and BigQuery
 
 ### Homework
-The answers to the homework assign
-
-- [homework_week_3.sql](homework_week_3.sql)
+My answers to the homework assignment for week 3 can be found [**here**](homework_week_3.sql).
